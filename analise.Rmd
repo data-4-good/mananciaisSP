@@ -1,0 +1,323 @@
+---
+title: "Mananciais"
+author: "Rabetti"
+date: "12/03/2015"
+output: html_document
+---
+
+```{r echo=F,results="hide"}
+library(ggplot2)
+require(plyr)
+require(knitr)
+library(gvlma)
+library(TTR)
+
+
+dados<-read.csv2("mananciais_att.csv")
+str(dados)
+head(dados)
+
+```
+
+# Manipulação do banco de dados
+
+```{r results="hide"}
+dados<-read.csv2("mananciais_att.csv")
+
+cant<-subset(dados,subset = manancial=="Cantareira")
+cant$data.<-as.Date(cant$data.,format = "%Y-%m-%d")
+cant$mes<-months(cant$data.)
+
+#quero pegar o i que o i+1 é menor que i
+
+pluviom<-data.frame("pluviometria"=NA,"mes"=NA,"volume"=NA)
+for(i in 1:4410){
+        if(cant$pluviometria.acumulada.no.mes[i]>cant$pluviometria.acumulada.no.mes[i+1]){
+                pluviom[i,]<-cbind(cant$pluviometria.acumulada.no.mes[i],
+                                   cant$mes[i],
+                                   cant$volume.armazenado[i])
+        } else pluviom[i,]<-c(NA,NA,NA)
+}
+
+pluviom<-data.frame(pluviom[complete.cases(pluviom),])
+
+
+# Acrescentar linha
+insertRow <- function(existingDF, newrow, r) {
+  existingDF[seq(r+1,nrow(existingDF)+1),] <- existingDF[seq(r,nrow(existingDF)),]
+  existingDF[r,] <- newrow
+  existingDF
+}
+
+pluviom<-insertRow(pluviom,newrow = c(0,"agosto",0.398),r = 56)
+pluviom$ano<-c(rep(2003:2014,each=12))
+
+pluviom$pluviometria<-as.numeric(pluviom$pluviometria)
+lorder<-pluviom$mes[1:12]
+pluviom$mes<-factor(pluviom$mes,levels=lorder)
+rm(lorder)
+pluviom$ano<-factor(pluviom$ano)
+
+```
+
+
+
+# Análise
+
+## Total e média de chuva no Cantareira por ano
+
+Verificou-se se os níveis de chuva realmente tem diminuído nos últimos anos:
+```{r }
+ddply(.data = pluviom, .(ano),summarise,
+      Total=sum(pluviometria),Media=mean(pluviometria),DesvioP=sd(pluviometria))
+
+sapply(ddply(.data = pluviom, .(ano),summarise,
+      Total=sum(pluviometria),Media=mean(pluviometria))[,2:3],mean)
+
+# Choveu quantos por cento menos em 2014
+1-(964.9/1460.325) 
+
+# Choveu quantos por cento menos em 2013
+1-(1090.1/1460.325) 
+
+```
+
+Realmente tem chovido menos na região do Sistema Cantareira. Mesmo somando o total de chuva para 2013 e 2014, tivemos menos chuva que apenas no ano de 2009. Vemos também que no ano de 2014 choveu 33,9% menos que a média histórica e 25,4% menos para 2013. Vamos observar os gráficos para cada mês e ano:
+
+```{r, r chuvames1sem,fig.path='./Figures/',fig.width=7, fig.height=6}
+pluviom1s<-pluviom[pluviom$mes==levels(pluviom$mes)[1:6],]
+
+ggplot(data=pluviom1s, aes(x=ano, y=pluviometria, group = mes, colour = mes)) +
+        geom_line() +
+        geom_point( size=4, shape=21, fill="white") +
+        ggtitle("Pluviometria acumulada por ano para cada mês - 1º semestre") +
+        scale_color_discrete(name="Mês") + 
+        scale_x_discrete(name="Ano") +
+        scale_y_continuous(name="Pluviometria Acumulada") +
+        geom_hline(aes(yintercept=132.5443), linetype="dashed")
+
+```
+
+
+
+```{r, r chuvames2sem,fig.path='./Figures/',fig.width=7, fig.height=6}
+pluviom2s<-pluviom[pluviom$mes==levels(pluviom$mes)[7:12],]
+
+ggplot(data=pluviom2s, aes(x=ano, y=pluviometria, group = mes, colour = mes)) +
+        geom_line() +
+        geom_point( size=4, shape=21, fill="white") +
+        ggtitle("Pluviometria acumulada por ano para cada mês - 2º semestre") +
+        scale_color_discrete(name="Mês") + 
+        scale_x_discrete(name="Ano") +
+        scale_y_continuous(name="Pluviometria Acumulada") +
+        geom_hline(aes(yintercept=132.5443), linetype="dashed")
+
+```
+
+Pelos gráficos e pelo cálculo do desvio padrão vemos que a quantidade de chuva por mês varia bastante de um ano para o outro mesmo sendo no mesmo mês. A linha que corta o gráfico em 132,54 será explicada posteriormente, mas veja que a maioria dos dados estão abaixo dela.
+
+
+```{r}
+
+cant$aumentovolume[1]<-0
+for(i in 2:4411){
+        cant$aumentovolume[i]<-cant$volume.armazenado[i]-cant$volume.armazenado[i-1]     
+}
+
+cantPLU = ts(cant$pluviometria.do.dia,frequency=365,start=c(2003,1))
+PLUcomponents = decompose(cantPLU)
+plot(PLUcomponents)
+plot(PLUcomponents$trend)
+
+```
+
+A tendência de queda quanto a quantidade de chuva no Sistema Cantareira estava consolidada a alguns anos, tendo seu período mais critico a partir do ano de 2013. Existem dois outliers na base dados. Vamos verificar quais pontos são estes e o porque.
+
+
+```{r}
+which.max(cant$aumentovolume)
+```
+
+Para seguirmos no processo de construção da reta de regressão linear deletaremos a linha específica. Foi realizado uma busca na internet do porque deste outlier. Descobriu-se que houve uma entrada de 182,5 bilhões de litros de água da reserva técnica do Sistema Cantareira em 16/05/2014, e assim foram acrescidos 18,5% sobre o volume total do sistema. 
+
+Houve também uma segunda entrada de pagua de reserva técnica no dia 24 de outubro de 2014. Este dados será também desconsiderado no nosso cálculo.
+
+```{r}
+with(cant[-c(4153,4314),],cor.test(aumentovolume,pluviometria.do.dia))
+
+modelo<-with(cant[-c(4153,4314),],lm(aumentovolume ~ pluviometria.do.dia));modelo
+
+summary(modelo)$r.squared 
+```
+
+O modelo explica muito pouco sobre a variação dos nossos dados. Apenas 31% segundo a medida R². Os dados estão muito viesados com 250 dias em que não chove mais o volume de água do sistema aumenta. Precisamos melhorar nosso modelo se queremos seguir com essa análise. Para isso decidi calcular a variação do volume pelo mês. 
+
+```{r}
+pluviom$volume<-as.numeric(pluviom$volume)
+pluviom$varvolume[1]<-pluviom$volume[1]-cant$volume.armazenado[1]
+for(i in 2:144){
+        pluviom$varvolume[i]<-pluviom$volume[i]-pluviom$volume[i-1]     
+}
+
+# Alterar março e outubro de 2014 por conta das reservas de volume morto
+which(pluviom$ano==2014 & pluviom$mes =="outubro")
+which(pluviom$ano==2014 & pluviom$mes =="maio")
+pluviom$varvolume[142]<-pluviom$varvolume[142]-0.106
+pluviom$varvolume[137]<-pluviom$varvolume[137]-0.185
+
+with(pluviom,cor.test(varvolume,pluviometria))
+
+modelo<-with(pluviom,lm(varvolume ~ pluviometria));modelo
+summary(modelo)
+
+```
+
+A correlação linear entre as duas variáveis quando se considera o mês aumentou bastante indo para 0,74. Esta é uma correlação forte. Agora, neste nosso novo modelo, a pluviometria acumulada no mês explica 55% da variação do volume do Sistema Cantareira. Conseguimos explicar a metade do problema da variação do volume com esse modelo.
+
+O mais interessante a se analisar aqui acredito que seja o fato de apenas 55% do problema da variação do volume do Cantareira ser explicado pela falta de água. Não esperava valores perto de 100% pois existem várias outras causas, mas esperávamos um valor bem maior. Como predição da variação do volume o nosso modelo é falho por faltar variáveis que expliquem.
+
+```{r}
+validation = gvlma(modelo)
+summary(validation)
+```
+
+Todos os pressupostos foram aceitos no modelo. Nosso modelo é válido como descritivo do problema da falta de água. 
+
+
+```{r hist varvolume,fig.path='./Figures/',fig.width=7, fig.height=6}
+
+
+histPercent <- function(x, ...) {
+        H <- hist(x, plot = FALSE)
+        H$density <- with(H, 100 * density* diff(breaks)[1])
+        labs <- paste(round(H$density), "%", sep="")
+        plot(H, freq = FALSE, labels = labs, 
+             main="Histograma da variação mensal \n do volume do Cantareira",
+             xlab="Variação do volume (%)",
+             ylab="Porcentagem",
+             ylim=c(0, 1.08*max(H$density)),...)
+}
+
+histPercent(pluviom$varvolume, col="gray")
+
+```
+
+# Sistema Alto Tietê
+
+
+```{r results="hide"}
+tiete<-subset(dados,subset = manancial=="AltoTiete")
+tiete$data.<-as.Date(tiete$data.,format = "%Y-%m-%d")
+tiete$mes<-months(tiete$data.)
+
+#quero pegar o i que o i+1 é menor que i
+
+pluviom<-data.frame("pluviometria"=NA,"mes"=NA,"volume"=NA)
+for(i in 1:4410){
+  if(tiete$pluviometria.acumulada.no.mes[i]>tiete$pluviometria.acumulada.no.mes[i+1]){
+    pluviom[i,]<-cbind(tiete$pluviometria.acumulada.no.mes[i],
+                       tiete$mes[i],
+                       tiete$volume.armazenado[i])
+  } else pluviom[i,]<-c(NA,NA,NA)
+}
+
+pluviom<-data.frame(pluviom[complete.cases(pluviom),])
+pluviom = pluviom[-25,]
+pluviom$ano<-c(rep(2003:2014,each=12))
+
+
+pluviom$pluviometria<-as.numeric(pluviom$pluviometria)
+lorder<-pluviom$mes[1:12]
+pluviom$mes<-factor(pluviom$mes,levels=lorder)
+rm(lorder)
+pluviom$ano<-factor(pluviom$ano)
+
+```
+
+
+# Análise
+
+## Total e média de chuva no Alto Tietê por ano
+
+Verificou-se se os níveis de chuva realmente tem diminuído nos últimos anos:
+
+```{r}
+ddply(.data = pluviom, .(ano),summarise,
+      Total=sum(pluviometria),Media=mean(pluviometria),DesvioP=sd(pluviometria))
+
+sapply(ddply(.data = pluviom, .(ano),summarise,
+             Total=sum(pluviometria),Media=mean(pluviometria))[,2:3],mean)
+
+1-(87.225/115.1417) 
+
+```
+
+Para o ano de 2014 choveu 24% menos que os outros anos no Sistema do Alto Tietê.
+
+Vou trabalhar com a variação no volume mensal assim como para a modelagem do Sistema Cantareira.
+
+```{r}
+tiete$aumentovolume[1]<-0
+for(i in 2:4411){
+  tiete$aumentovolume[i]<-tiete$volume.armazenado[i]-tiete$volume.armazenado[i-1]     
+}
+
+tietePLU = ts(tiete$pluviometria.do.dia,frequency=365,start=c(2003,1))
+PLUcomponents = decompose(tietePLU)
+plot(PLUcomponents)
+plot(PLUcomponents$trend)
+
+```
+
+A tendência de queda quanto a quantidade de chuva no Sistema do Alto Tietê estava consolidada a alguns anos, tendo seu período mais critico a partir da metade do ano de 2013.
+
+```{r}
+which(tiete$aumentovolume>0.05)
+tiete[4364:4366,]
+modelo<-with(tiete[-c(4365),],lm(aumentovolume ~ pluviometria.do.dia))
+modelo
+summary(modelo)$r.squared 
+
+
+
+pluviom$volume<-as.numeric(pluviom$volume)
+pluviom$varvolume[1]<-pluviom$volume[1]-cant$volume.armazenado[1]
+for(i in 2:144){
+  pluviom$varvolume[i]<-pluviom$volume[i]-pluviom$volume[i-1]     
+}
+
+which(pluviom$ano==2014 & pluviom$mes =="dezembro")
+pluviom$varvolume[144]<-pluviom$varvolume[144]-0.065
+
+
+with(pluviom,cor.test(varvolume,pluviometria))
+
+```
+
+
+A correlaçao entre a variaçao de volume do Sistema do Alto Tietê e a pluviometria registrada é muito alta. Foi encontrado o valor de 0,88 para o Coeficiente de Pearson.
+
+```{r}
+
+modelo<-with(pluviom,lm(varvolume ~ pluviometria));modelo
+summary(modelo)
+
+
+```
+
+
+# Conclusão
+
+Entre 2003 e 2014, em 62% dos dias houve diminuição do volume do Cantareira. Nós sempre fomos dependentes de meses com muita chuva - dos 5% do nosso gráfico. Segundo o nosso gráfico novembro, dezembro, janeiro e fevereiro. E quando não chove nesses meses temos a crise em que estamos. E foi exatamente o que aconteceu a partir do final de 2012 e com o menor índice de chuva histórico para o mês de janeiro em 2013 e sendo batido em 2014. Era irresponsabilidade confiar que essa chuva sempre viria sabendo da variabilidade com que a chuva vem ano após ano como vimos pelos gráficos. 
+
+Com um ano de 2014 com 33,9% menos de chuva que a média histórica e um 2013 com 25,4% menos, faltou água. Se 55% da variação do volume do Cantareira depende de uma variável com desvio padrão tão alto, deveriam haver medidas de segurança para quando isso acontecesse. O risco era grande e uma hora era certo que daria errado.
+
+
+# Fontes
+
+Banco de dados:
+http://www2.sabesp.com.br/mananciais/DivulgacaoSiteSabesp.aspx
+
+Programação para obtenção dos dados da Sabesp:
+https://github.com/oeco/mananciais
+
