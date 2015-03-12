@@ -12,26 +12,38 @@ require(knitr)
 library(gvlma)
 library(TTR)
 
-
-dados<-read.csv2("mananciais_att.csv")
-str(dados)
-head(dados)
+# File accessed on: 30/01/2015 às 14h:32
+# Download da base de dados
+# fileURL="https://raw.githubusercontent.com/oeco/mananciais/master/data/data.csv"
+# download.file(fileURL, destfile = "mananciais.csv")
+dados<-read.csv("mananciais.csv")
 
 ```
 
 # Manipulação do banco de dados
 
 ```{r results="hide"}
-dados<-read.csv2("mananciais_att.csv")
 
-cant<-subset(dados,subset = manancial=="Cantareira")
-cant$data.<-as.Date(cant$data.,format = "%Y-%m-%d")
-cant$mes<-months(cant$data.)
+# Somente até 2014
+dados = dados[!grepl("^2015",dados$data),]
+
+cant<-subset(dados,subset = manancial=="sistemaCantareira")
+names(cant) <- c("data", "manancial", "volume.armazenado", "pluviometria.do.dia", "pluviometria.acumulada.no.mes","media.historica.do.mes")
+
+cant$data <- as.Date(as.character(cant$data))
+cant$mes<-months(cant$data)
+
+cant$volume.armazenado <- as.numeric(gsub(pattern= ",", replacement= ".", x= gsub(pattern= '%', replacement= '', cant$volume.armazenado, fixed=TRUE), fixed=TRUE)) 
+
+for(i in 4:6){
+    cant[,i] <- as.numeric(gsub(pattern= ",", replacement= ".", x= gsub(pattern= 'mm', replacement= '', cant[,i], fixed=TRUE), fixed=TRUE))
+    }
+
 
 #quero pegar o i que o i+1 é menor que i
 
 pluviom<-data.frame("pluviometria"=NA,"mes"=NA,"volume"=NA)
-for(i in 1:4410){
+for(i in 1:(dim(cant)[1]-1)){
         if(cant$pluviometria.acumulada.no.mes[i]>cant$pluviometria.acumulada.no.mes[i+1]){
                 pluviom[i,]<-cbind(cant$pluviometria.acumulada.no.mes[i],
                                    cant$mes[i],
@@ -41,7 +53,6 @@ for(i in 1:4410){
 
 pluviom<-data.frame(pluviom[complete.cases(pluviom),])
 
-
 # Acrescentar linha
 insertRow <- function(existingDF, newrow, r) {
   existingDF[seq(r+1,nrow(existingDF)+1),] <- existingDF[seq(r,nrow(existingDF)),]
@@ -49,7 +60,8 @@ insertRow <- function(existingDF, newrow, r) {
   existingDF
 }
 
-pluviom<-insertRow(pluviom,newrow = c(0,"agosto",0.398),r = 56)
+pluviom<-insertRow(pluviom,newrow = c(0,"agosto",39.8),r = 56)
+pluviom[144,]=c(165.5,"dezembro",7.2)
 pluviom$ano<-c(rep(2003:2014,each=12))
 
 pluviom$pluviometria<-as.numeric(pluviom$pluviometria)
@@ -120,7 +132,7 @@ Pelos gráficos e pelo cálculo do desvio padrão vemos que a quantidade de chuv
 ```{r}
 
 cant$aumentovolume[1]<-0
-for(i in 2:4411){
+for(i in 2:dim(cant)[1]){
         cant$aumentovolume[i]<-cant$volume.armazenado[i]-cant$volume.armazenado[i-1]     
 }
 
@@ -162,8 +174,8 @@ for(i in 2:144){
 # Alterar março e outubro de 2014 por conta das reservas de volume morto
 which(pluviom$ano==2014 & pluviom$mes =="outubro")
 which(pluviom$ano==2014 & pluviom$mes =="maio")
-pluviom$varvolume[142]<-pluviom$varvolume[142]-0.106
-pluviom$varvolume[137]<-pluviom$varvolume[137]-0.185
+pluviom$varvolume[142]<-pluviom$varvolume[142]-10.6
+pluviom$varvolume[137]<-pluviom$varvolume[137]-18.5
 
 with(pluviom,cor.test(varvolume,pluviometria))
 
@@ -206,14 +218,23 @@ histPercent(pluviom$varvolume, col="gray")
 
 
 ```{r results="hide"}
-tiete<-subset(dados,subset = manancial=="AltoTiete")
-tiete$data.<-as.Date(tiete$data.,format = "%Y-%m-%d")
-tiete$mes<-months(tiete$data.)
+tiete<-subset(dados,subset = manancial=="sistemaAltoTiete")
+names(tiete) <- c("data", "manancial", "volume.armazenado", "pluviometria.do.dia", "pluviometria.acumulada.no.mes","media.historica.do.mes")
+
+tiete$data <- as.Date(as.character(tiete$data))
+tiete$mes<-months(tiete$data)
+
+tiete$volume.armazenado <- as.numeric(gsub(pattern= ",", replacement= ".", x= gsub(pattern= '%', replacement= '', tiete$volume.armazenado, fixed=TRUE), fixed=TRUE)) 
+
+for(i in 4:6){
+    tiete[,i] <- as.numeric(gsub(pattern= ",", replacement= ".", x= gsub(pattern= 'mm', replacement= '', tiete[,i], fixed=TRUE), fixed=TRUE))
+    }
+
 
 #quero pegar o i que o i+1 é menor que i
 
 pluviom<-data.frame("pluviometria"=NA,"mes"=NA,"volume"=NA)
-for(i in 1:4410){
+for(i in 1:(dim(tiete)[1]-1)){
   if(tiete$pluviometria.acumulada.no.mes[i]>tiete$pluviometria.acumulada.no.mes[i+1]){
     pluviom[i,]<-cbind(tiete$pluviometria.acumulada.no.mes[i],
                        tiete$mes[i],
@@ -223,6 +244,9 @@ for(i in 1:4410){
 
 pluviom<-data.frame(pluviom[complete.cases(pluviom),])
 pluviom = pluviom[-25,]
+# Banco de dados deleta recente deletou os níveis em novembro - dados de versão passada
+pluviom<-insertRow(pluviom,newrow = c(163.1,"novembro",25),r = 23)
+pluviom[144,] = c(190.6,"dezembro",12.2)
 pluviom$ano<-c(rep(2003:2014,each=12))
 
 
@@ -258,7 +282,7 @@ Vou trabalhar com a variação no volume mensal assim como para a modelagem do S
 
 ```{r}
 tiete$aumentovolume[1]<-0
-for(i in 2:4411){
+for(i in 2:dim(tiete)[1]){
   tiete$aumentovolume[i]<-tiete$volume.armazenado[i]-tiete$volume.armazenado[i-1]     
 }
 
@@ -272,13 +296,6 @@ plot(PLUcomponents$trend)
 A tendência de queda quanto a quantidade de chuva no Sistema do Alto Tietê estava consolidada a alguns anos, tendo seu período mais critico a partir da metade do ano de 2013.
 
 ```{r}
-which(tiete$aumentovolume>0.05)
-tiete[4364:4366,]
-modelo<-with(tiete[-c(4365),],lm(aumentovolume ~ pluviometria.do.dia))
-modelo
-summary(modelo)$r.squared 
-
-
 
 pluviom$volume<-as.numeric(pluviom$volume)
 pluviom$varvolume[1]<-pluviom$volume[1]-cant$volume.armazenado[1]
@@ -287,7 +304,7 @@ for(i in 2:144){
 }
 
 which(pluviom$ano==2014 & pluviom$mes =="dezembro")
-pluviom$varvolume[144]<-pluviom$varvolume[144]-0.065
+pluviom$varvolume[144]<-pluviom$varvolume[144]-6.5
 
 
 with(pluviom,cor.test(varvolume,pluviometria))
