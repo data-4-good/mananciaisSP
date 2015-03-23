@@ -344,4 +344,9 @@ Com um ano de 2014 com 33,9% menos de chuva que a média histórica e um 2013 com 
 ### Fontes
 
 [Banco de dados](http://www2.sabesp.com.br/mananciais/DivulgacaoSiteSabesp.aspx) e [Programação para obtenção dos dados da Sabesp](https://github.com/oeco/mananciais)
+  
+  
+  
+Nota:  
 
+<sup>O Data4Good busca sempre que possível verificar as fontes de informações utilizadas em suas análises, porém não assumimos qualquer responsabilidade quanto a exatidão das informações aqui apresentadas. Em nenhum caso será o Data4Good responsável por quaisquer danos acidentais , diretos ou indiretos de qualquer natureza, ou quaisquer danos resultantes do uso de informações , arquivos , códigos ou qualquer outra coisa obtidas a partir deste site. O Data4Good também não aceita qualquer responsabilidade por links a outros sites. Use as informações e materiais aqui obtidos a seu próprio risco.</sup>
